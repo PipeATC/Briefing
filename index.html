@@ -3,289 +3,436 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRIEFING OPS</title>
+    <title>BRIEFING - Panel de Configuración Operativa Local</title>
     <style>
-        /* Variables y Reset */
         :root {
-            --bg-base: #0b111a;
-            --bg-panel: #131c29;
-            --bg-card: #1a2436;
-            --accent-cyan: #00d2ff;
-            --accent-blue: #007acc;
-            --text-main: #e2e8f0;
-            --text-muted: #94a3b8;
+            --bg-base: #070c14;
+            --bg-panel: #0f1726;
+            --bg-card: #172237;
+            --bg-input: #1e2d4a;
+            --accent-cyan: #00f0ff;
+            --accent-blue: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #64748b;
+            --success: #00ff66;
+            --warning: #f59e0b;
             --danger: #ef4444;
-            --border-color: rgba(0, 210, 255, 0.2);
+            --border: rgba(0, 240, 255, 0.15);
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-base); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
 
-        /* Pantalla de Inicio (Modal) */
-        #startup-screen {
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* SCREEN DE AUTENTICACIÓN (LOGIN) */
+        #login-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: var(--bg-base); z-index: 1000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 0.5s ease;
+            background-color: var(--bg-base); z-index: 10000;
+            display: flex; justify-content: center; align-items: center;
         }
-        .startup-box {
-            background-color: var(--bg-panel); padding: 40px; border-radius: 8px;
-            border: 1px solid var(--border-color); text-align: center; width: 400px;
-            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1);
+        .login-card {
+            background-color: var(--bg-panel); padding: 40px; border-radius: 6px;
+            border: 1px solid var(--border); width: 420px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
         }
-        .startup-box h1 { color: var(--accent-cyan); margin-bottom: 10px; letter-spacing: 2px; }
-        .startup-box p { color: var(--text-muted); margin-bottom: 30px; }
-        select, button { width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 4px; font-size: 16px; }
-        select { background: var(--bg-card); color: white; border: 1px solid var(--border-color); outline: none; }
-        button { background: var(--accent-blue); color: white; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s;}
-        button:hover { background: var(--accent-cyan); color: var(--bg-base); }
+        .login-card h1 { color: var(--accent-cyan); font-size: 1.8rem; margin-bottom: 8px; letter-spacing: 2px; }
+        .login-card p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 25px; }
+        .input-group { margin-bottom: 18px; text-align: left; }
+        .input-group label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: bold;}
+        .input-group input, .input-group select {
+            width: 100%; padding: 12px; background-color: var(--bg-input);
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; color: white;
+            font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+        }
+        .input-group input:focus, .input-group select:focus { border-color: var(--accent-cyan); }
+        .login-btn {
+            width: 100%; padding: 14px; background-color: var(--accent-blue); color: white;
+            border: none; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; transition: all 0.2s;
+        }
+        .login-btn:hover { background-color: var(--accent-cyan); color: var(--bg-base); }
+        .login-error { color: var(--danger); font-size: 0.85rem; margin-top: 12px; display: none; font-family: monospace; }
 
-        /* Layout Principal */
+        /* INTERFAZ OPERATIVA PRINCIPAL */
         #app-layout { display: none; width: 100%; height: 100%; }
 
-        /* Barra Lateral */
-        aside { width: 280px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); }
-        .sidebar-header h2 { color: var(--accent-cyan); font-size: 1.2rem; display: flex; align-items: center; gap: 10px;}
-        .sidebar-header span { font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 5px; }
+        /* SIDEBAR DE CONTROL DEL ESPACIO AÉREO */
+        aside {
+            width: 320px; background-color: var(--bg-panel);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
+        }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border); }
+        .sidebar-header h2 { color: var(--accent-cyan); font-size: 1.3rem; letter-spacing: 1px; }
+        .sidebar-header span { font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 4px; }
+        
+        .search-container { padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .search-container input {
+            width: 100%; padding: 10px; background-color: var(--bg-input);
+            border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; color: white; font-size: 0.9rem;
+        }
+
         .airport-list { flex: 1; overflow-y: auto; padding: 10px; }
         .airport-item {
-            padding: 12px 15px; margin-bottom: 5px; border-radius: 4px; cursor: pointer;
-            display: flex; align-items: center; gap: 10px; transition: 0.2s; color: var(--text-muted);
+            padding: 12px 15px; margin-bottom: 6px; border-radius: 4px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            color: var(--text-muted); border: 1px solid transparent; transition: all 0.15s;
         }
-        .airport-item:hover, .airport-item.active { background-color: var(--bg-card); color: var(--accent-cyan); border-left: 3px solid var(--accent-cyan); }
-        
-        /* Área Principal */
+        .airport-item:hover { background-color: rgba(255,255,255,0.02); color: var(--text-main); }
+        .airport-item.active {
+            background-color: var(--bg-card); color: var(--accent-cyan);
+            border-color: var(--border); border-left: 4px solid var(--accent-cyan);
+        }
+        .airport-item .icao-code { font-family: monospace; font-size: 1.1rem; font-weight: bold; }
+        .airport-item .ap-name { font-size: 0.8rem; color: var(--text-muted); text-align: right; }
+        .airport-item.active .ap-name { color: var(--text-main); }
+
+        /* SECCIÓN DE VISUALIZACIÓN CENTRAL */
         main { flex: 1; display: flex; flex-direction: column; }
-        header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
-        .header-title h1 { font-size: 1.4rem; color: var(--accent-cyan); text-transform: uppercase; }
-        .header-title p { color: var(--text-muted); font-size: 0.9rem; }
-        .clock { font-family: monospace; font-size: 1.2rem; color: var(--accent-cyan); }
+        header {
+            padding: 15px 30px; background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+        }
+        header h1 { font-size: 1.3rem; font-weight: 400; color: var(--text-main); }
+        header h1 span { color: var(--accent-cyan); font-weight: bold; }
+        .clock { font-family: monospace; font-size: 1.4rem; color: var(--accent-cyan); font-weight: bold; }
 
-        /* Grid de Tarjetas */
-        .dashboard-content { flex: 1; padding: 30px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; align-content: start; }
-        
-        /* Tarjeta de Aeropuerto */
-        .card { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
-        .card-header { padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
-        .card-header h3 { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
-        .status-badge { background-color: rgba(0, 210, 255, 0.2); color: var(--accent-cyan); padding: 4px 10px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
-        
-        .card-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .data-section h4 { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 1px; }
-        
-        .runway-tags { display: flex; gap: 10px; margin-bottom: 15px; }
-        .rwy-tag { background-color: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 5px 12px; border-radius: 4px; font-weight: bold; font-family: monospace; }
-        
-        ul.list-data { list-style: none; }
-        ul.list-data li { margin-bottom: 5px; font-size: 0.9rem; display: flex; align-items: center; gap: 5px; }
-        ul.list-data li::before { content: "•"; color: var(--accent-cyan); }
+        .dashboard-grid {
+            flex: 1; padding: 20px; overflow-y: auto;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 20px;
+            align-content: start;
+        }
 
-        .metar-box { grid-column: 1 / -1; background-color: rgba(0,0,0,0.3); padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem; line-height: 1.5; border-left: 2px solid var(--accent-cyan); }
-        .taf-box { grid-column: 1 / -1; margin-top: -10px; font-family: monospace; font-size: 0.8rem; color: var(--text-muted); }
+        /* CONFIGURACIÓN DE LAS TARJETAS SELECTORAS */
+        .card {
+            background-color: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: 5px; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .card-header {
+            padding: 12px 18px; background-color: rgba(0, 240, 255, 0.02);
+            border-bottom: 1px solid rgba(0, 240, 255, 0.08);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .header-title-container { display: flex; align-items: center; gap: 12px; }
+        .card-header h3 { font-size: 1.15rem; font-family: monospace; color: var(--accent-cyan); }
+        .card-header .city-label { font-size: 0.8rem; color: var(--text-muted); }
 
-        /* Iconos SVG Inline */
-        svg { width: 18px; height: 18px; fill: currentColor; }
+        /* Estilos de las Categorías de Vuelo (VMC, MVFR, IFR, LIFR) */
+        .flight-category {
+            font-size: 0.75rem; font-weight: bold; padding: 3px 8px; border-radius: 4px;
+            font-family: monospace; letter-spacing: 1px; display: inline-block;
+        }
+        .cat-VMC { background-color: rgba(0, 255, 102, 0.15); color: var(--success); border: 1px solid var(--success); }
+        .cat-MVFR { background-color: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid var(--accent-blue); }
+        .cat-IFR { background-color: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger); }
+        .cat-LIFR { background-color: rgba(217, 70, 239, 0.15); color: #d946ef; border: 1px solid #d946ef; }
+
+        .card-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+        
+        /* Selectores Operativos */
+        .selectors-layout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .selector-box { background-color: var(--bg-card); padding: 10px; border-radius: 4px; }
+        .selector-box label { display: block; font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; letter-spacing: 0.5px; font-weight: bold;}
+        .selector-box select {
+            width: 100%; padding: 8px; background-color: var(--bg-input);
+            color: var(--text-main); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px;
+            font-size: 0.85rem; font-weight: bold; outline: none; cursor: pointer; color: var(--accent-cyan);
+        }
+        .selector-box select:focus { border-color: var(--accent-cyan); }
+
+        /* Información Técnica e Info de IFIS */
+        .ifis-block {
+            background-color: rgba(0,0,0,0.2); border-left: 3px solid var(--success);
+            padding: 10px; font-family: monospace; font-size: 0.85rem; line-height: 1.4;
+        }
+        .ifis-block.taf-block { border-left-color: var(--warning); }
+        .ifis-block.notam-block { border-left-color: var(--danger); font-size: 0.8rem; color: #cbd5e1; max-height: 100px; overflow-y: auto;}
+        .block-title { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 3px; font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--bg-input); border-radius: 3px; }
     </style>
 </head>
 <body>
 
-    <div id="startup-screen">
-        <div class="startup-box">
-            <h1>BRIEFING <span>OPS</span></h1>
-            <p>Sistema de Visualización de Datos Aeronáuticos</p>
-            <select id="unit-select">
-                <option value="ACC SANTIAGO">ACC SANTIAGO</option>
-                <option value="APP SANTIAGO">APP SANTIAGO</option>
-                <option value="APP ANTOFAGASTA">APP ANTOFAGASTA</option>
-                <option value="APP CONCEPCIÓN">APP CONCEPCIÓN</option>
-                <option value="APP PUERTO MONTT">APP PUERTO MONTT</option>
-                <option value="APP IQUIQUE">APP IQUIQUE</option>
-                <option value="APP PUNTA ARENAS">APP PUNTA ARENAS</option>
-            </select>
-            <button onclick="iniciarApp()">Iniciar Sesión Operativa</button>
+    <div id="login-overlay">
+        <div class="login-card">
+            <h1>SISTEMA BRIEFING</h1>
+            <p>Consola de Gestión Operativa Estática - Centros de Control / APP</p>
+            
+            <div class="input-group">
+                <label>Unidad ATS de Servicio</label>
+                <select id="login-unit">
+                    <option value="ACC SANTIAGO">ACC SANTIAGO</option>
+                    <option value="APP SANTIAGO">SANTIAGO APROXIMACIÓN</option>
+                    <option value="APP ANTOFAGASTA">ANTOFAGASTA APROXIMACIÓN</option>
+                    <option value="APP CONCEPCIÓN">CONCEPCIÓN APROXIMACIÓN</option>
+                    <option value="ACC PUERTO MONTT">ACCM PUERTO MONTT</option>
+                    <option value="ACC IQUIQUE">ACC IQUIQUE</option>
+                    <option value="ACC PUNTA ARENAS">ACC PUNTA ARENAS</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Contraseña del Sistema</label>
+                <input type="password" id="login-password" placeholder="••••••••" onkeypress="evaluarClaveIntro(event)">
+            </div>
+
+            <button class="login-btn" onclick="validarAcceso()">Acceder a la Consola</button>
+            <div class="login-error" id="error-msg">ERROR: Clave operativa inválida. Reintente.</div>
         </div>
     </div>
 
     <div id="app-layout">
         <aside>
             <div class="sidebar-header">
-                <h2>
-                    <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-                    BRIEFING
-                </h2>
-                <span id="display-unit">UNIDAD NO SELECCIONADA</span>
+                <h2>BRIEFING OPS</h2>
+                <span id="session-unit">UNIDAD INICIALIZADA</span>
             </div>
-            <div style="padding: 10px 15px; color: var(--text-muted); font-size: 0.8rem; border-bottom: 1px solid var(--border-color);">AERÓDROMOS EN SEGUIMIENTO</div>
-            <div class="airport-list" id="sidebar-airports">
+            <div class="search-container">
+                <input type="text" id="sidebar-search" placeholder="Buscar aeródromo (OACI)..." oninput="filtrarSidebar()">
+            </div>
+            <div class="airport-list" id="sidebar-nodes">
                 </div>
         </aside>
 
         <main>
             <header>
-                <div class="header-title">
-                    <h1>Resumen del Espacio Aéreo</h1>
-                    <p id="header-subtitle">Seleccione aeródromos en el panel izquierdo</p>
-                </div>
-                <div class="clock" id="utc-clock">00:00:00 UTC</div>
+                <h1>Consola de Información de Pistas y Procedimientos</h1>
+                <div class="clock" id="zulu-timer">00:00:00 Z</div>
             </header>
-            <div class="dashboard-content" id="dashboard">
+
+            <div class="dashboard-grid" id="dashboard-cards-container">
                 </div>
         </main>
     </div>
 
     <script>
-        // Configuración Inicial de Aeropuertos
-        const aeropuertos = [
-            { icao: 'SCAR', nombre: 'Chacalluta', activo: false },
-            { icao: 'SCDA', nombre: 'Diego Aracena', activo: false },
-            { icao: 'SCFA', nombre: 'Andrés Sabella', activo: false },
-            { icao: 'SCCF', nombre: 'El Loa', activo: false },
-            { icao: 'SCSE', nombre: 'La Florida', activo: false },
-            { icao: 'SCEL', nombre: 'Arturo Merino Benítez', activo: true },
-            { icao: 'SCVM', nombre: 'Viña del Mar', activo: false },
-            { icao: 'SCIP', nombre: 'Mataveri', activo: false },
-            { icao: 'SCIE', nombre: 'Carriel Sur', activo: true },
-            { icao: 'SCQP', nombre: 'La Araucanía', activo: true },
-            { icao: 'SCPQ', nombre: 'Mocopulli', activo: false },
-            { icao: 'SCVD', nombre: 'Pichoy', activo: false },
-            { icao: 'SCTE', nombre: 'El Tepual', activo: false },
-            { icao: 'SCBA', nombre: 'Balmaceda', activo: false },
-            { icao: 'SCJO', nombre: 'Canal Bajo', activo: false },
-            { icao: 'SCCI', nombre: 'Carlos Ibáñez del Campo', activo: false }
-        ];
-
-        // Base de datos simulada (Mock) para imitar datos de IFIS
-        const datosOperativos = {
-            'SCEL': {
-                rwy: ['17L', '17R'],
-                stars: ['EREPU 1A', 'VTN 1B'],
-                app: ['ILS Z RWY 17L', 'ILS Y RWY 17R'],
-                metar: 'SCEL 232300Z 18008KT 150V210 9999 FEW030 22/11 Q1014 NOSIG',
-                taf: 'TAF SCEL 232230Z 2400/2506 19010KT 9999 SCT030 TX25/2419Z TN10/2410Z'
-            },
-            'SCFA': {
-                rwy: ['19'],
-                stars: ['RNAV 1 ALPHA'],
-                app: ['ILS RWY 19'],
-                metar: 'SCFA 232300Z 19010KT 9999 FEW020 25/08 Q1013',
-                taf: 'TAF SCFA 231700Z 2318/2418 20012KT 9999 NSC'
-            }
-            // Para el resto generaremos datos dinámicos genéricos
+        // CONFIGURACIÓN MAESTRA DE PROCEDIMIENTOS Y DATOS DE LOS 16 AEROPUERTOS DE CHILE
+        const baseDatosAerodromos = {
+            'SCAR': { nombre: 'Chacalluta', ciudad: 'Arica', rwys: ['02', '20'], apps: ['ILS Z RWY 02', 'RNP RWY 02', 'RNP RWY 20', 'VOR RWY 02'], stars: ['ALARA 1A', 'VUTAS 1A', 'OPERA 2B'], metar: 'SCAR 011600Z 21008KT 9999 FEW015 20/14 Q1013 NOSIG', taf: 'TAF SCAR 011615Z 0118/0218 20010KT 9999 FEW018 TX22/0119Z TN14/0210Z', notam: 'A0542/26 - RWY 02/20 WIP LIGHTING SYS MAINT DE 1400 A 1800 UTC.' },
+            'SCDA': { nombre: 'Diego Aracena', ciudad: 'Iquique', rwys: ['01', '19'], apps: ['ILS Z RWY 01', 'RNP RWY 01', 'RNP RWY 19', 'VOR RWY 01'], stars: ['ALCON 1A', 'NORTE 1B', 'LOA 3A'], metar: 'SCDA 011600Z 20011KT 9999 CAVOK 22/13 Q1014 NOSIG', taf: 'TAF SCDA 011600Z 0118/0218 19012KT 9999 NSC TX24/0119Z TN13/0209Z', notam: 'A1120/26 - TWY BRAVO RESTRICCION DE RODAJE PARA AERONAVES DE MAS DE 40 TONS.' },
+            'SCFA': { nombre: 'Andrés Sabella', ciudad: 'Antofagasta', rwys: ['01', '19'], apps: ['ILS Z RWY 19', 'RNP RWY 19', 'RNP RWY 01', 'VOR RWY 19'], stars: ['RNAV 1 ALPHA', 'ASOBO 1C', 'MEJI 2A'], metar: 'SCFA 011600Z 18012KT 9999 FEW020 21/12 Q1014 NOSIG', taf: 'TAF SCFA 011000Z 0112/0212 19014KT 9999 FEW022 TX23/0118Z', notam: 'A0891/26 - CTR RADAR ALTIMETER ANOMALIAS REPORTADAS EN SECTOR DE APROX.' },
+            'SCCF': { nombre: 'El Loa', ciudad: 'Calama', rwys: ['10', '28'], apps: ['RNP RWY 10', 'RNP RWY 28', 'VOR DME RWY 10'], stars: ['CALAMA 1A', 'CHUI 2B'], metar: 'SCCF 011600Z 26018KT 9999 SKC 23/02 Q1012 NOSIG', taf: 'TAF SCCF 011200Z 0112/0212 25022G32KT SKC TX25/0118Z', notam: 'A0431/26 - EXCESIVO POLVO EN SUSPENSION EN SECTOR DE EXTRACCION MINERA CERCANO.' },
+            'SCSE': { nombre: 'La Florida', ciudad: 'La Serena', rwys: ['12', '30'], apps: ['RNP RWY 12', 'RNP RWY 30', 'VOR DME RWY 12'], stars: ['SERENA 1A', 'TONGOY 2C'], metar: 'SCSE 011600Z 22007KT 9999 BKN012 17/12 Q1015 NOSIG', taf: 'TAF SCSE 011610Z 0118/0218 24009KT 9999 BKN015 OVC030 TN12/0208Z', notam: 'A0112/26 - PAPI RWY 12 U/S DEBIDO A TRABAJOS DE CALIBRACION EN TIERRA.' },
+            'SCEL': { nombre: 'Arturo Merino Benítez', ciudad: 'Santiago', rwys: ['17L', '17R', '35L', '35R'], apps: ['ILS Z RWY 17L', 'ILS Y RWY 17R', 'RNP RWY 17L', 'ILS Z RWY 35R', 'RNP RWY 35L'], stars: ['EREPU 1A', 'VTN 1B', 'ANGAL 1B', 'UMKAP 1A', 'DGO 1C'], metar: 'SCEL 011600Z 19008KT 150V230 9999 FEW030 22/11 Q1015 NOSIG', taf: 'TAF SCEL 011200Z 0112/0212 18010KT 9999 FEW035 TX24/0119Z TN10/0210Z', notam: 'A1821/26 - A-CDM PROCEDIMIENTOS TOTALMENTE OPERATIVOS. REVISAR TSAT EN CONSOLA.' },
+            'SCVM': { nombre: 'Viña del Mar', ciudad: 'Concón', rwys: ['05', '23'], apps: ['VOR RWY 23', 'RNP RWY 05', 'VISUAL RWY 05'], stars: ['CONCON 1A', 'TABON 1B'], metar: 'SCVM 011600Z 24011KT 8000 BKN010 16/13 Q1015', taf: 'TAF SCVM 011500Z 0118/0206 23012KT 9999 BKN012 OVC025', notam: 'A0223/26 - OPERACION EXCLUSIVA PARA VUELOS MILITARES Y CIVILES AUTORIZADOS.' },
+            'SCIP': { nombre: 'Mataveri', ciudad: 'Isla de Pascua', rwys: ['10', '28'], apps: ['VOR DME RWY 10', 'RNP RWY 10', 'RNP RWY 28'], stars: ['MATAVERI 1A', 'HANGA 1B'], metar: 'SCIP 011600Z 09014KT 9999 SCT022 24/19 Q1020', taf: 'TAF SCIP 011200Z 0112/0212 10015KT 9999 SCT025 BKN080', notam: 'A0045/26 - FRECUENCIA PRINCIPAL VHF 124.3 MHZ CON COBERTURA REDUCIDA HACIA EL SE.' },
+            'SCIE': { nombre: 'Carriel Sur', ciudad: 'Concepción', rwys: ['02', '20'], apps: ['ILS Z RWY 02', 'RNP RWY 02', 'RNP RWY 20', 'VOR RWY 02'], stars: ['TALCA 1A', 'PENCU 1B', 'CHILLAN 2C'], metar: 'SCIE 011600Z 36015KT 9999 BKN025 15/10 Q1011', taf: 'TAF SCIE 011612Z 0118/0218 35016G26KT 9999 BKN030 OVC070', notam: 'A0944/26 - ILS CAT III RWY 02 OPERANDO EN MODO PRUEBA DEBIDO A REEMPLAZO DE LOCALIZADOR.' },
+            'SCQP': { nombre: 'La Araucanía', ciudad: 'Temuco', rwys: ['01', '19'], apps: ['ILS Z RWY 19', 'RNP RWY 19', 'RNP RWY 01', 'VOR DME RWY 19'], stars: ['TEMUCO 1A', 'GORBEA 1B'], metar: 'SCQP 011600Z 34008KT 9999 SCT020 BKN040 14/09 Q1012', taf: 'TAF SCQP 011600Z 0118/0218 02010KT 9999 BKN035 TN08/0209Z', notam: 'A0341/26 - AVSEC REFORZADO EN PERIMETRO DE PLATAFORMA COMERCIAL.' },
+            'SCPQ': { nombre: 'Mocopulli', ciudad: 'Castro', rwys: ['17', '35'], apps: ['RNP RWY 17', 'RNP RWY 35', 'VISUAL RWY 17'], stars: ['CASTRO 1A', 'CHILOE 2D'], metar: 'SCPQ 011600Z 32014KT 9999 BKN018 12/08 Q1010', taf: 'TAF SCPQ 011500Z 0118/0206 31015KT 8000 -RA BKN020', notam: 'A0198/26 - AD EXCLUSIVO PARA OPERACION DIURNA, NO SE REGISTRA RELLENO DE COMBUSTIBLE JET-A1.' },
+            'SCVD': { nombre: 'Pichoy', ciudad: 'Valdivia', rwys: ['17', '35'], apps: ['RNP RWY 17', 'VOR DME RWY 17', 'VISUAL RWY 35'], stars: ['VALDIVIA 1A', 'PRINGLES 1B'], metar: 'SCVD 011600Z 29010KT 9999 SCT022 13/09 Q1011', taf: 'TAF SCVD 011200Z 0112/0212 30012KT 9999 SCT030', notam: 'A0556/26 - TRÁFICO EXCLUSIVO DE AVES EN SECTOR DE APROXIMACIÓN FINAL RWY 17.' },
+            'SCTE': { nombre: 'El Tepual', ciudad: 'Puerto Montt', rwys: ['17', '35'], apps: ['ILS Z RWY 17', 'RNP RWY 17', 'RNP RWY 35', 'VOR DME RWY 17'], stars: ['KIRAM 1A', 'ALCON 1B', 'TEPU 1A'], metar: 'SCTE 011600Z 28012KT 9999 BKN025 OVC040 11/08 Q1009 NOSIG', taf: 'TAF SCTE 011200Z 0112/0212 29015KT 9999 BKN030 OVC060 TN06/0208Z', notam: 'A1523/26 - PARVADAS DE TRILLES DETECTADAS EN LAS CERCANÍAS DE LAS CALLES DE RODAJE.' },
+            'SCBA': { nombre: 'Balmaceda', ciudad: 'Balmaceda', rwys: ['09', '27'], apps: ['RNP RWY 09', 'VOR DME RWY 09', 'VISUAL RWY 27'], stars: ['BALMACEDA 1A', 'COYHAIQUE 1B'], metar: 'SCBA 011600Z 27022G35KT 9999 SKC 09/-04 Q1006', taf: 'TAF SCBA 011200Z 0112/0212 28025G38KT SKC TX10/0118Z TN-05/0210Z', notam: 'A0229/26 - REPORTE DE TURBULENCIA SEVERA EN CAPA BAJA DEBIDO A FUERTES VIENTOS DEL OESTE.' },
+            'SCJO': { nombre: 'Canal Bajo', ciudad: 'Osorno', rwys: ['15', '33'], apps: ['RNP RWY 15', 'VOR DME RWY 15', 'VISUAL RWY 33'], stars: ['OSORNO 1A', 'PILMAIQUEN 2B'], metar: 'SCJO 011600Z 30008KT 9999 SCT025 13/09 Q1010', taf: 'TAF SCJO 011200Z 0112/0212 29010KT 9999 SCT035', notam: 'A0114/26 - RESTRICCIÓN DE ESPACIO DE GIRO EN CABECERA 15 POR DETERIORO DEL ASFALTO.' },
+            'SCCI': { nombre: 'Carlos Ibáñez del Campo', ciudad: 'Punta Arenas', rwys: ['07', '25', '12', '30'], apps: ['ILS Z RWY 25', 'VOR DME RWY 07', 'RNP RWY 12', 'RNP RWY 30'], stars: ['DARAM 1A', 'NAS 1B', 'SENO 3C'], metar: 'SCCI 011600Z 29028G42KT 9999 BKN035 05/-01 Q1002', taf: 'TAF SCCI 011200Z 0112/0212 28030G45KT 9999 BKN040 TX07/0117Z TN-02/0207Z', notam: 'A2211/26 - CONTROL DE ESCARCHA EN RWY CENTRAL ACTIVADO POR BAJAS TEMPERATURAS.' }
         };
 
-        // Generador de datos genéricos para aeropuertos sin mock específico
-        function generarDatosGenericos(icao) {
-            return {
-                rwy: ['01'],
-                stars: ['RNAV 1'],
-                app: ['RNP RWY 01'],
-                metar: `${icao} ${new Date().getUTCDate().toString().padStart(2, '0')}${new Date().getUTCHours().toString().padStart(2, '0')}00Z 00000KT 9999 CAVOK 15/10 Q1013`,
-                taf: `TAF ${icao} INFO NO DISPONIBLE LOCALMENTE`
+        // Estado interno en memoria
+        const estadoOpcionesDeConsola = {};
+
+        Object.keys(baseDatosAerodromos).forEach(icao => {
+            const data = baseDatosAerodromos[icao];
+            estadoOpcionesDeConsola[icao] = {
+                rwyInUse: data.rwys[0],
+                appInUse: data.apps[0],
+                starInUse: data.stars[0],
+                activo: (icao === 'SCEL' || icao === 'SCIE' || icao === 'SCQP')
             };
+        });
+
+        // PARSER DE METAR PARA CATEGORÍAS DE VUELO
+        function determinarCategoriaVuelo(metar) {
+            if (metar.includes('CAVOK')) return 'VMC';
+
+            let visibilidad = 9999;
+            let techoNubes = 999; // Cientos de pies
+
+            // 1. Visibilidad (Busca grupo de 4 dígitos aislados, excluyendo la hora que termina en Z)
+            const matchVisibilidad = metar.match(/\s(\d{4})\s/);
+            if (matchVisibilidad) {
+                visibilidad = parseInt(matchVisibilidad[1], 10);
+            }
+
+            // 2. Techo de Nubes (Buscamos capas Broken (BKN) o Overcast (OVC) y tomamos la más baja)
+            const regexNubes = /(BKN|OVC)(\d{3})/g;
+            let matchNubes;
+            while ((matchNubes = regexNubes.exec(metar)) !== null) {
+                const altura = parseInt(matchNubes[2], 10);
+                if (altura < techoNubes) techoNubes = altura;
+            }
+
+            // Evaluar Categoría por Visibilidad
+            let catVis = 'VMC';
+            if (visibilidad < 1600) catVis = 'LIFR';
+            else if (visibilidad < 5000) catVis = 'IFR';
+            else if (visibilidad <= 8000) catVis = 'MVFR';
+
+            // Evaluar Categoría por Techo
+            let catTecho = 'VMC';
+            if (techoNubes < 5) catTecho = 'LIFR';           // Menos de 500 ft
+            else if (techoNubes < 10) catTecho = 'IFR';      // 500 a 999 ft
+            else if (techoNubes <= 30) catTecho = 'MVFR';    // 1000 a 3000 ft
+
+            // Retornar la condición más restrictiva (Prioridad: LIFR > IFR > MVFR > VMC)
+            const prioridades = { 'LIFR': 4, 'IFR': 3, 'MVFR': 2, 'VMC': 1 };
+            if (prioridades[catVis] >= prioridades[catTecho]) return catVis;
+            return catTecho;
         }
 
-        // Lógica de Inicio
-        function iniciarApp() {
-            const unidad = document.getElementById('unit-select').value;
-            document.getElementById('display-unit').innerText = `UNIDAD: ${unidad}`;
-            document.getElementById('header-subtitle').innerText = `OPERACIONES - ${unidad}`;
-            
-            document.getElementById('startup-screen').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('startup-screen').style.display = 'none';
-                document.getElementById('app-layout').style.display = 'flex';
-                renderizarSidebar();
-                renderizarDashboard();
-            }, 500);
+        // CONTROL DE ACCESO
+        function evaluarClaveIntro(event) {
+            if (event.key === "Enter") validarAcceso();
         }
 
-        // Renderizar menú lateral
-        function renderizarSidebar() {
-            const container = document.getElementById('sidebar-airports');
+        function validarAcceso() {
+            const passInput = document.getElementById('login-password').value;
+            const errorMsg = document.getElementById('error-msg');
+            const selectedUnit = document.getElementById('login-unit').value;
+
+            if (passInput === "atc2026") {
+                errorMsg.style.display = 'none';
+                document.getElementById('session-unit').innerText = `UNIDAD ACTUAL: ${selectedUnit}`;
+                document.getElementById('login-overlay').style.opacity = '0';
+                
+                setTimeout(() => {
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('app-layout').style.display = 'flex';
+                    construirSidebar();
+                    actualizarDashboard();
+                }, 350);
+            } else {
+                errorMsg.style.display = 'block';
+            }
+        }
+
+        // CONSTRUCCIÓN E INTERACTIVIDAD DE LA INTERFAZ
+        function construirSidebar() {
+            const container = document.getElementById('sidebar-nodes');
             container.innerHTML = '';
-            
-            aeropuertos.forEach((ap, index) => {
-                const div = document.createElement('div');
-                div.className = `airport-item ${ap.activo ? 'active' : ''}`;
-                div.innerHTML = `
-                    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                    ${ap.icao} - ${ap.nombre}
+
+            Object.keys(baseDatosAerodromos).forEach(icao => {
+                const data = baseDatosAerodromos[icao];
+                const state = estadoOpcionesDeConsola[icao];
+                
+                const item = document.createElement('div');
+                item.className = `airport-item ${state.activo ? 'active' : ''}`;
+                item.setAttribute('data-filter', `${icao} ${data.nombre} ${data.ciudad}`.toLowerCase());
+                item.innerHTML = `
+                    <span class="icao-code">${icao}</span>
+                    <span class="ap-name">${data.nombre}<br><small style="color:var(--text-muted); font-size:0.75rem;">${data.ciudad}</small></span>
                 `;
-                div.onclick = () => toggleAeropuerto(index);
-                container.appendChild(div);
+                item.onclick = () => {
+                    state.activo = !state.activo;
+                    construirSidebar();
+                    actualizarDashboard();
+                };
+                container.appendChild(item);
             });
         }
 
-        // Activar/Desactivar aeropuertos en la vista
-        function toggleAeropuerto(index) {
-            aeropuertos[index].activo = !aeropuertos[index].activo;
-            renderizarSidebar();
-            renderizarDashboard();
+        function filtrarSidebar() {
+            const q = document.getElementById('sidebar-search').value.toLowerCase();
+            document.querySelectorAll('.airport-item').forEach(item => {
+                const text = item.getAttribute('data-filter');
+                item.style.display = text.includes(q) ? 'flex' : 'none';
+            });
         }
 
-        // Renderizar las tarjetas en el dashboard
-        function renderizarDashboard() {
-            const container = document.getElementById('dashboard');
-            container.innerHTML = '';
+        function registrarCambioLocal(icao, tipoParametro, valor) {
+            estadoOpcionesDeConsola[icao][tipoParametro] = valor;
+        }
 
-            const activos = aeropuertos.filter(ap => ap.activo);
-            
-            if(activos.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align:center; margin-top: 50px;">No hay aeródromos seleccionados para seguimiento.</p>';
+        function actualizarDashboard() {
+            const grid = document.getElementById('dashboard-cards-container');
+            grid.innerHTML = '';
+
+            const aerodromosActivos = Object.keys(baseDatosAerodromos).filter(icao => estadoOpcionesDeConsola[icao].activo);
+
+            if (aerodromosActivos.length === 0) {
+                grid.innerHTML = `<p style="grid-column: 1/-1; color: var(--text-muted); text-align: center; margin-top: 50px; font-size: 0.95rem;">No hay aeródromos seleccionados. Active estaciones desde la lista lateral.</p>`;
                 return;
             }
 
-            activos.forEach(ap => {
-                const datos = datosOperativos[ap.icao] || generarDatosGenericos(ap.icao);
+            aerodromosActivos.forEach(icao => {
+                const data = baseDatosAerodromos[icao];
+                const state = estadoOpcionesDeConsola[icao];
                 
-                const rwyHtml = datos.rwy.map(r => `<div class="rwy-tag">${r}</div>`).join('');
-                const starsHtml = datos.stars.map(s => `<li>${s}</li>`).join('');
-                const appHtml = datos.app.map(a => `<li>${a}</li>`).join('');
+                // Calcular la categoría VFR/IFR basándose en el string del METAR
+                const categoriaVuelo = determinarCategoriaVuelo(data.metar);
 
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
                     <div class="card-header">
-                        <h3>
-                            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                            ${ap.icao} (${ap.nombre})
-                        </h3>
-                        <span class="status-badge">VMC / IFR</span>
+                        <div class="header-title-container">
+                            <h3>${icao} - ${data.nombre.toUpperCase()}</h3>
+                            <span class="flight-category cat-${categoriaVuelo}">${categoriaVuelo}</span>
+                        </div>
+                        <span class="city-label">${data.ciudad}</span>
                     </div>
                     <div class="card-body">
-                        <div class="data-section">
-                            <h4>Pistas Activas</h4>
-                            <div class="runway-tags">${rwyHtml}</div>
-                            <h4>Aproximaciones</h4>
-                            <ul class="list-data">${appHtml}</ul>
+                        <div class="selectors-layout">
+                            <div class="selector-box">
+                                <label>Pista en Uso</label>
+                                <select onchange="registrarCambioLocal('${icao}', 'rwyInUse', this.value)">
+                                    ${data.rwys.map(r => `<option value="${r}" ${r === state.rwyInUse ? 'selected' : ''}>RWY ${r}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="selector-box">
+                                <label>Aproximación en Uso</label>
+                                <select onchange="registrarCambioLocal('${icao}', 'appInUse', this.value)">
+                                    ${data.apps.map(a => `<option value="${a}" ${a === state.appInUse ? 'selected' : ''}>${a}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="selector-box">
+                                <label>STAR en Uso</label>
+                                <select onchange="registrarCambioLocal('${icao}', 'starInUse', this.value)">
+                                    ${data.stars.map(s => `<option value="${s}" ${s === state.starInUse ? 'selected' : ''}>${s}</option>`).join('')}
+                                </select>
+                            </div>
                         </div>
-                        <div class="data-section">
-                            <h4>STARs en Uso</h4>
-                            <ul class="list-data">${starsHtml}</ul>
+
+                        <div class="ifis-block">
+                            <span class="block-title">IFIS - METAR</span>
+                            ${data.metar}
                         </div>
-                        <div class="metar-box">
-                            <span style="color: var(--text-muted);">METAR</span><br>
-                            ${datos.metar}
+                        <div class="ifis-block TAF-block">
+                            <span class="block-title">IFIS - TAF</span>
+                            ${data.taf}
                         </div>
-                        <div class="taf-box">
-                            ${datos.taf}
+                        <div class="ifis-block notam-block">
+                            <span class="block-title">IFIS - NOTAM ACTIVOS</span>
+                            ${data.notam}
                         </div>
                     </div>
                 `;
-                container.appendChild(card);
+                grid.appendChild(card);
             });
         }
 
-        // Reloj UTC
-        function actualizarReloj() {
-            const ahora = new Date();
-            const h = ahora.getUTCHours().toString().padStart(2, '0');
-            const m = ahora.getUTCMinutes().toString().padStart(2, '0');
-            const s = ahora.getUTCSeconds().toString().padStart(2, '0');
-            document.getElementById('utc-clock').innerText = `${h}:${m}:${s} UTC`;
+        // RELOJ DIGITAL ZULU (UTC)
+        function refrescarReloj() {
+            const f = new Date();
+            const h = f.getUTCHours().toString().padStart(2, '0');
+            const m = f.getUTCMinutes().toString().padStart(2, '0');
+            const s = f.getUTCSeconds().toString().padStart(2, '0');
+            document.getElementById('zulu-timer').innerText = `${h}:${m}:${s} Z`;
         }
-        setInterval(actualizarReloj, 1000);
-        actualizarReloj();
+        setInterval(refrescarReloj, 1000);
+        refrescarReloj();
     </script>
 </body>
 </html>
