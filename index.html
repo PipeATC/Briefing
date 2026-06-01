@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRIEFING OPS</title>
+    <style>
+        /* Variables y Reset */
+        :root {
+            --bg-base: #0b111a;
+            --bg-panel: #131c29;
+            --bg-card: #1a2436;
+            --accent-cyan: #00d2ff;
+            --accent-blue: #007acc;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --border-color: rgba(0, 210, 255, 0.2);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-base); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
+
+        /* Pantalla de Inicio (Modal) */
+        #startup-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-base); z-index: 1000;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 0.5s ease;
+        }
+        .startup-box {
+            background-color: var(--bg-panel); padding: 40px; border-radius: 8px;
+            border: 1px solid var(--border-color); text-align: center; width: 400px;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1);
+        }
+        .startup-box h1 { color: var(--accent-cyan); margin-bottom: 10px; letter-spacing: 2px; }
+        .startup-box p { color: var(--text-muted); margin-bottom: 30px; }
+        select, button { width: 100%; padding: 12px; margin-bottom: 20px; border-radius: 4px; font-size: 16px; }
+        select { background: var(--bg-card); color: white; border: 1px solid var(--border-color); outline: none; }
+        button { background: var(--accent-blue); color: white; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; transition: 0.3s;}
+        button:hover { background: var(--accent-cyan); color: var(--bg-base); }
+
+        /* Layout Principal */
+        #app-layout { display: none; width: 100%; height: 100%; }
+
+        /* Barra Lateral */
+        aside { width: 280px; background-color: var(--bg-panel); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-header h2 { color: var(--accent-cyan); font-size: 1.2rem; display: flex; align-items: center; gap: 10px;}
+        .sidebar-header span { font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 5px; }
+        .airport-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .airport-item {
+            padding: 12px 15px; margin-bottom: 5px; border-radius: 4px; cursor: pointer;
+            display: flex; align-items: center; gap: 10px; transition: 0.2s; color: var(--text-muted);
+        }
+        .airport-item:hover, .airport-item.active { background-color: var(--bg-card); color: var(--accent-cyan); border-left: 3px solid var(--accent-cyan); }
+        
+        /* Área Principal */
+        main { flex: 1; display: flex; flex-direction: column; }
+        header { padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .header-title h1 { font-size: 1.4rem; color: var(--accent-cyan); text-transform: uppercase; }
+        .header-title p { color: var(--text-muted); font-size: 0.9rem; }
+        .clock { font-family: monospace; font-size: 1.2rem; color: var(--accent-cyan); }
+
+        /* Grid de Tarjetas */
+        .dashboard-content { flex: 1; padding: 30px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; align-content: start; }
+        
+        /* Tarjeta de Aeropuerto */
+        .card { background-color: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
+        .card-header { padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .card-header h3 { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+        .status-badge { background-color: rgba(0, 210, 255, 0.2); color: var(--accent-cyan); padding: 4px 10px; border-radius: 3px; font-size: 0.8rem; font-weight: bold; }
+        
+        .card-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .data-section h4 { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 1px; }
+        
+        .runway-tags { display: flex; gap: 10px; margin-bottom: 15px; }
+        .rwy-tag { background-color: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 5px 12px; border-radius: 4px; font-weight: bold; font-family: monospace; }
+        
+        ul.list-data { list-style: none; }
+        ul.list-data li { margin-bottom: 5px; font-size: 0.9rem; display: flex; align-items: center; gap: 5px; }
+        ul.list-data li::before { content: "•"; color: var(--accent-cyan); }
+
+        .metar-box { grid-column: 1 / -1; background-color: rgba(0,0,0,0.3); padding: 15px; border-radius: 4px; font-family: monospace; font-size: 0.85rem; line-height: 1.5; border-left: 2px solid var(--accent-cyan); }
+        .taf-box { grid-column: 1 / -1; margin-top: -10px; font-family: monospace; font-size: 0.8rem; color: var(--text-muted); }
+
+        /* Iconos SVG Inline */
+        svg { width: 18px; height: 18px; fill: currentColor; }
+    </style>
+</head>
+<body>
+
+    <div id="startup-screen">
+        <div class="startup-box">
+            <h1>BRIEFING <span>OPS</span></h1>
+            <p>Sistema de Visualización de Datos Aeronáuticos</p>
+            <select id="unit-select">
+                <option value="ACC SANTIAGO">ACC SANTIAGO</option>
+                <option value="APP SANTIAGO">APP SANTIAGO</option>
+                <option value="APP ANTOFAGASTA">APP ANTOFAGASTA</option>
+                <option value="APP CONCEPCIÓN">APP CONCEPCIÓN</option>
+                <option value="APP PUERTO MONTT">APP PUERTO MONTT</option>
+                <option value="APP IQUIQUE">APP IQUIQUE</option>
+                <option value="APP PUNTA ARENAS">APP PUNTA ARENAS</option>
+            </select>
+            <button onclick="iniciarApp()">Iniciar Sesión Operativa</button>
+        </div>
+    </div>
+
+    <div id="app-layout">
+        <aside>
+            <div class="sidebar-header">
+                <h2>
+                    <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                    BRIEFING
+                </h2>
+                <span id="display-unit">UNIDAD NO SELECCIONADA</span>
+            </div>
+            <div style="padding: 10px 15px; color: var(--text-muted); font-size: 0.8rem; border-bottom: 1px solid var(--border-color);">AERÓDROMOS EN SEGUIMIENTO</div>
+            <div class="airport-list" id="sidebar-airports">
+                </div>
+        </aside>
+
+        <main>
+            <header>
+                <div class="header-title">
+                    <h1>Resumen del Espacio Aéreo</h1>
+                    <p id="header-subtitle">Seleccione aeródromos en el panel izquierdo</p>
+                </div>
+                <div class="clock" id="utc-clock">00:00:00 UTC</div>
+            </header>
+            <div class="dashboard-content" id="dashboard">
+                </div>
+        </main>
+    </div>
+
+    <script>
+        // Configuración Inicial de Aeropuertos
+        const aeropuertos = [
+            { icao: 'SCAR', nombre: 'Chacalluta', activo: false },
+            { icao: 'SCDA', nombre: 'Diego Aracena', activo: false },
+            { icao: 'SCFA', nombre: 'Andrés Sabella', activo: true },
+            { icao: 'SCCF', nombre: 'Cerro Moreno (Militar)', activo: false },
+            { icao: 'SCSE', nombre: 'La Florida', activo: false },
+            { icao: 'SCEL', nombre: 'Arturo Merino Benítez', activo: true },
+            { icao: 'SCVM', nombre: 'Viña del Mar', activo: false },
+            { icao: 'SCIP', nombre: 'Mataveri', activo: false },
+            { icao: 'SCIE', nombre: 'Carriel Sur', activo: false },
+            { icao: 'SCQP', nombre: 'La Araucanía', activo: false },
+            { icao: 'SCPQ', nombre: 'Mocopulli', activo: false },
+            { icao: 'SCVD', nombre: 'Pichoy', activo: false },
+            { icao: 'SCTE', nombre: 'El Tepual', activo: false },
+            { icao: 'SCBA', nombre: 'Balmaceda', activo: false },
+            { icao: 'SCJO', nombre: 'Canal Bajo', activo: false },
+            { icao: 'SCCI', nombre: 'Carlos Ibáñez del Campo', activo: false }
+        ];
+
+        // Base de datos simulada (Mock) para imitar datos de IFIS
+        const datosOperativos = {
+            'SCEL': {
+                rwy: ['17L', '17R'],
+                stars: ['EREPU 1A', 'VTN 1B'],
+                app: ['ILS Z RWY 17L', 'ILS Y RWY 17R'],
+                metar: 'SCEL 232300Z 18008KT 150V210 9999 FEW030 22/11 Q1014 NOSIG',
+                taf: 'TAF SCEL 232230Z 2400/2506 19010KT 9999 SCT030 TX25/2419Z TN10/2410Z'
+            },
+            'SCFA': {
+                rwy: ['19'],
+                stars: ['RNAV 1 ALPHA'],
+                app: ['ILS RWY 19'],
+                metar: 'SCFA 232300Z 19010KT 9999 FEW020 25/08 Q1013',
+                taf: 'TAF SCFA 231700Z 2318/2418 20012KT 9999 NSC'
+            }
+            // Para el resto generaremos datos dinámicos genéricos
+        };
+
+        // Generador de datos genéricos para aeropuertos sin mock específico
+        function generarDatosGenericos(icao) {
+            return {
+                rwy: ['01'],
+                stars: ['RNAV 1'],
+                app: ['RNP RWY 01'],
+                metar: `${icao} ${new Date().getUTCDate().toString().padStart(2, '0')}${new Date().getUTCHours().toString().padStart(2, '0')}00Z 00000KT 9999 CAVOK 15/10 Q1013`,
+                taf: `TAF ${icao} INFO NO DISPONIBLE LOCALMENTE`
+            };
+        }
+
+        // Lógica de Inicio
+        function iniciarApp() {
+            const unidad = document.getElementById('unit-select').value;
+            document.getElementById('display-unit').innerText = `UNIDAD: ${unidad}`;
+            document.getElementById('header-subtitle').innerText = `OPERACIONES - ${unidad}`;
+            
+            document.getElementById('startup-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('startup-screen').style.display = 'none';
+                document.getElementById('app-layout').style.display = 'flex';
+                renderizarSidebar();
+                renderizarDashboard();
+            }, 500);
+        }
+
+        // Renderizar menú lateral
+        function renderizarSidebar() {
+            const container = document.getElementById('sidebar-airports');
+            container.innerHTML = '';
+            
+            aeropuertos.forEach((ap, index) => {
+                const div = document.createElement('div');
+                div.className = `airport-item ${ap.activo ? 'active' : ''}`;
+                div.innerHTML = `
+                    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    ${ap.icao} - ${ap.nombre}
+                `;
+                div.onclick = () => toggleAeropuerto(index);
+                container.appendChild(div);
+            });
+        }
+
+        // Activar/Desactivar aeropuertos en la vista
+        function toggleAeropuerto(index) {
+            aeropuertos[index].activo = !aeropuertos[index].activo;
+            renderizarSidebar();
+            renderizarDashboard();
+        }
+
+        // Renderizar las tarjetas en el dashboard
+        function renderizarDashboard() {
+            const container = document.getElementById('dashboard');
+            container.innerHTML = '';
+
+            const activos = aeropuertos.filter(ap => ap.activo);
+            
+            if(activos.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1; text-align:center; margin-top: 50px;">No hay aeródromos seleccionados para seguimiento.</p>';
+                return;
+            }
+
+            activos.forEach(ap => {
+                const datos = datosOperativos[ap.icao] || generarDatosGenericos(ap.icao);
+                
+                const rwyHtml = datos.rwy.map(r => `<div class="rwy-tag">${r}</div>`).join('');
+                const starsHtml = datos.stars.map(s => `<li>${s}</li>`).join('');
+                const appHtml = datos.app.map(a => `<li>${a}</li>`).join('');
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <h3>
+                            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            ${ap.icao} (${ap.nombre})
+                        </h3>
+                        <span class="status-badge">VMC / IFR</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="data-section">
+                            <h4>Pistas Activas</h4>
+                            <div class="runway-tags">${rwyHtml}</div>
+                            <h4>Aproximaciones</h4>
+                            <ul class="list-data">${appHtml}</ul>
+                        </div>
+                        <div class="data-section">
+                            <h4>STARs en Uso</h4>
+                            <ul class="list-data">${starsHtml}</ul>
+                        </div>
+                        <div class="metar-box">
+                            <span style="color: var(--text-muted);">METAR</span><br>
+                            ${datos.metar}
+                        </div>
+                        <div class="taf-box">
+                            ${datos.taf}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Reloj UTC
+        function actualizarReloj() {
+            const ahora = new Date();
+            const h = ahora.getUTCHours().toString().padStart(2, '0');
+            const m = ahora.getUTCMinutes().toString().padStart(2, '0');
+            const s = ahora.getUTCSeconds().toString().padStart(2, '0');
+            document.getElementById('utc-clock').innerText = `${h}:${m}:${s} UTC`;
+        }
+        setInterval(actualizarReloj, 1000);
+        actualizarReloj();
+    </script>
+</body>
+</html>
