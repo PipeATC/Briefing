@@ -242,7 +242,7 @@
             padding: 10px; font-family: monospace; font-size: 0.85rem; line-height: 1.4;
         }
         .ifis-block.taf-block { border-left-color: var(--warning); }
-        .ifis-block.notam-block { border-left-color: var(--danger); font-size: 0.8rem; color: #cbd5e1; max-height: 100px; overflow-y: auto;}
+        .ifis-block.notam-block { border-left-color: var(--danger); font-size: 0.8rem; color: #cbd5e1; max-height: 100px; overflow-y: auto; white-space: pre-wrap; }
         .block-title { font-size: 0.7rem; color: var(--text-muted); display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: bold; }
         .block-title .src-tag { color: var(--text-muted); font-weight: normal; }
 
@@ -567,7 +567,7 @@
         function sembrarMeteo() {
             Object.keys(baseDatosAerodromos).forEach(icao => {
                 const d = baseDatosAerodromos[icao];
-                estadoMeteo[icao] = { metar: d.metar, taf: d.taf, fuente: 'SEMBRADO', ts: null };
+                estadoMeteo[icao] = { metar: d.metar, taf: d.taf, notam: d.notam || '', fuente: 'SEMBRADO', ts: null };
             });
         }
 
@@ -588,47 +588,70 @@
             } finally { clearTimeout(id); }
         }
 
-        // Obtiene METAR + TAF de todas las estaciones en una sola petición por tipo
+        // Obtiene METAR + TAF + NOTAM de todas las estaciones en peticiones batch
         async function actualizarMeteorologia() {
             const icaos = Object.keys(baseDatosAerodromos);
             setEstadoFeed('LOADING', 'ACTUALIZANDO');
             try {
-                let metarMap = {}, tafMap = {};
+                let metarMap = {}, tafMap = {}, notamMap = {};
 
                 if (CONFIG_METEO.PROXY_METEO) {
-                    // Modo proxy (meteochile/DGAC via weather-proxy.js): { metar:{ICAO:str}, taf:{ICAO:str} }
+                    // Modo proxy (meteochile/DGAC via weather-proxy.js): { metar:{ICAO:str}, taf:{ICAO:str}, notam:{ICAO:str} }
                     const r = await fetchConTimeout(`${CONFIG_METEO.PROXY_METEO}?ids=${icaos.join(',')}`);
                     if (r.status === 429) throw new Error('RATE_LIMIT');
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     const j = await r.json();
                     metarMap = j.metar || {};
                     tafMap = j.taf || {};
+                    notamMap = j.notam || {};
                 } else {
-                    // Modo directo NOAA AWC (JSON), una petición batch por tipo
+                    // Modo directo NOAA AWC (JSON), peticiones batch paralelas por tipo
                     const ids = icaos.join(',');
-                    const [rMetar, rTaf] = await Promise.all([
+                    // NOTAM: petición no crítica — si falla, se mantiene la caché
+                    const [rMetar, rTaf, rNotam] = await Promise.all([
                         fetchConTimeout(`${CONFIG_METEO.baseAWC}/metar?ids=${ids}&format=json`),
-                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/taf?ids=${ids}&format=json`)
+                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/taf?ids=${ids}&format=json&hours=24`),
+                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/notam?ids=${ids}&format=json`).catch(() => null)
                     ]);
                     if (rMetar.status === 429 || rTaf.status === 429) throw new Error('RATE_LIMIT');
                     if (!rMetar.ok || !rTaf.ok) throw new Error('HTTP ' + rMetar.status + '/' + rTaf.status);
+
                     const metars = await rMetar.json();
                     const tafs = await rTaf.json();
                     (Array.isArray(metars) ? metars : []).forEach(m => {
                         if (m && m.icaoId && m.rawOb) metarMap[m.icaoId] = m.rawOb;
                     });
                     (Array.isArray(tafs) ? tafs : []).forEach(t => {
-                        if (t && t.icaoId && t.rawTAF) tafMap[t.icaoId] = t.rawTAF;
+                        // Compatibilidad con rawTAF (campo original) y rawTaf (variante)
+                        if (t && t.icaoId && (t.rawTAF || t.rawTaf)) tafMap[t.icaoId] = t.rawTAF || t.rawTaf;
                     });
+
+                    // Agrupar NOTAMs por ICAO (un aeródromo puede tener varios NOTAMs activos)
+                    if (rNotam && rNotam.ok) {
+                        const notams = await rNotam.json();
+                        const grupos = {};
+                        (Array.isArray(notams) ? notams : []).forEach(n => {
+                            const loc = n.icaoId || n.icaoLocation;
+                            if (!loc) return;
+                            if (!grupos[loc]) grupos[loc] = [];
+                            const txt = (n.notamTxt || n.message || n.rawNotam || '').trim();
+                            if (txt) grupos[loc].push(txt);
+                        });
+                        // Para aeródromos con respuesta de la API (aunque vacía) actualizar la caché
+                        icaos.forEach(icao => {
+                            if (grupos[icao] !== undefined) notamMap[icao] = grupos[icao].join('\n');
+                        });
+                    }
                 }
 
                 let actualizados = 0;
                 icaos.forEach(icao => {
-                    const nm = metarMap[icao], nt = tafMap[icao];
-                    if (nm || nt) {
+                    const nm = metarMap[icao], nt = tafMap[icao], nn = notamMap[icao];
+                    if (nm || nt || nn !== undefined) {
                         estadoMeteo[icao] = {
                             metar: nm || estadoMeteo[icao].metar,
                             taf: nt || estadoMeteo[icao].taf,
+                            notam: nn !== undefined ? nn : estadoMeteo[icao].notam,
                             fuente: 'LIVE', ts: new Date()
                         };
                         actualizados++;
@@ -663,7 +686,7 @@
             return f.getUTCHours().toString().padStart(2,'0') + ':' + f.getUTCMinutes().toString().padStart(2,'0') + 'Z';
         }
 
-        // Actualiza SOLO los bloques METAR/TAF y la categoría sin tocar los selectores
+        // Actualiza SOLO los bloques METAR/TAF/NOTAM y la categoría sin tocar los selectores
         // (así no se interrumpe un cambio pendiente en curso)
         function refrescarBloquesMeteo() {
             Object.keys(estadoOpcionesDeConsola).forEach(icao => {
@@ -672,10 +695,12 @@
                 if (!meteo) return;
                 const elMetar = document.getElementById('metar-' + icao);
                 const elTaf = document.getElementById('taf-' + icao);
+                const elNotam = document.getElementById('notam-' + icao);
                 const elCat = document.getElementById('cat-' + icao);
                 const elSrc = document.getElementById('src-' + icao);
                 if (elMetar) elMetar.innerText = meteo.metar;
                 if (elTaf) elTaf.innerText = meteo.taf;
+                if (elNotam) elNotam.innerText = meteo.notam || '(Sin NOTAMs activos)';
                 if (elSrc) elSrc.innerText = meteo.fuente + (meteo.ts ? ' ' + relojCorto() : '');
                 if (elCat) {
                     const cat = determinarCategoriaVuelo(meteo.metar);
@@ -843,7 +868,7 @@
         // Construye el HTML de una tarjeta de aeródromo
         function htmlTarjeta(icao) {
             const data = datosAerodromo(icao);
-            const meteo = estadoMeteo[icao] || { metar: data.metar, taf: data.taf, fuente: 'SEMBRADO', ts: null };
+            const meteo = estadoMeteo[icao] || { metar: data.metar, taf: data.taf, notam: data.notam || '', fuente: 'SEMBRADO', ts: null };
             const categoriaVuelo = determinarCategoriaVuelo(meteo.metar);
             const pendiente = !!cambiosPendientes[icao];
             const provisional = data.provisional
@@ -899,7 +924,7 @@
                         </div>
                         <div class="ifis-block notam-block">
                             <span class="block-title">IFIS - NOTAM ACTIVOS</span>
-                            ${data.notam}
+                            <span id="notam-${icao}">${meteo.notam || '(Sin NOTAMs activos)'}</span>
                         </div>
                     </div>
                 </div>`;

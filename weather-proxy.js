@@ -36,7 +36,7 @@ const ICAOS = [
 ];
 
 // Caché en memoria + control de backoff anti rate-limit
-let cache = { metar: {}, taf: {}, ts: null, fuente: 'INICIANDO' };
+let cache = { metar: {}, taf: {}, notam: {}, ts: null, fuente: 'INICIANDO' };
 let backoffMs = 15000;
 
 function fetchConTimeout(url) {
@@ -49,22 +49,40 @@ function fetchConTimeout(url) {
 async function refrescar() {
   const ids = ICAOS.join(',');
   try {
-    const [rMetar, rTaf] = await Promise.all([
+    const [rMetar, rTaf, rNotam] = await Promise.all([
       fetchConTimeout(`${FUENTE_BASE}/metar?ids=${ids}&format=json`),
-      fetchConTimeout(`${FUENTE_BASE}/taf?ids=${ids}&format=json`)
+      fetchConTimeout(`${FUENTE_BASE}/taf?ids=${ids}&format=json&hours=24`),
+      fetchConTimeout(`${FUENTE_BASE}/notam?ids=${ids}&format=json`).catch(() => null)
     ]);
     if (rMetar.status === 429 || rTaf.status === 429) throw new Error('RATE_LIMIT');
     if (!rMetar.ok || !rTaf.ok) throw new Error(`HTTP ${rMetar.status}/${rTaf.status}`);
 
     const metars = await rMetar.json();
     const tafs = await rTaf.json();
-    const metar = {}, taf = {};
+    const metar = {}, taf = {}, notam = {};
     (Array.isArray(metars) ? metars : []).forEach(m => { if (m && m.icaoId && m.rawOb) metar[m.icaoId] = m.rawOb; });
-    (Array.isArray(tafs) ? tafs : []).forEach(t => { if (t && t.icaoId && t.rawTAF) taf[t.icaoId] = t.rawTAF; });
+    (Array.isArray(tafs) ? tafs : []).forEach(t => {
+      if (t && t.icaoId && (t.rawTAF || t.rawTaf)) taf[t.icaoId] = t.rawTAF || t.rawTaf;
+    });
 
-    cache = { metar, taf, ts: new Date().toISOString(), fuente: 'LIVE' };
+    if (rNotam && rNotam.ok) {
+      const notams = await rNotam.json();
+      const grupos = {};
+      (Array.isArray(notams) ? notams : []).forEach(n => {
+        const loc = n.icaoId || n.icaoLocation;
+        if (!loc) return;
+        if (!grupos[loc]) grupos[loc] = [];
+        const txt = (n.notamTxt || n.message || n.rawNotam || '').trim();
+        if (txt) grupos[loc].push(txt);
+      });
+      ICAOS.forEach(icao => {
+        if (grupos[icao] !== undefined) notam[icao] = grupos[icao].join('\n');
+      });
+    }
+
+    cache = { metar, taf, notam, ts: new Date().toISOString(), fuente: 'LIVE' };
     backoffMs = 15000; // éxito -> reset backoff
-    console.log(`[meteo] actualizado ${cache.ts} (${Object.keys(metar).length} METAR / ${Object.keys(taf).length} TAF)`);
+    console.log(`[meteo] actualizado ${cache.ts} (${Object.keys(metar).length} METAR / ${Object.keys(taf).length} TAF / ${Object.keys(notam).length} NOTAM)`);
     setTimeout(refrescar, INTERVALO_MS);
   } catch (err) {
     console.error(`[meteo] error: ${err.message} -> reintento en ${Math.round(backoffMs/1000)}s`);
