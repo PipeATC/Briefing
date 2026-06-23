@@ -588,70 +588,123 @@
             } finally { clearTimeout(id); }
         }
 
-        // Obtiene METAR + TAF + NOTAM de todas las estaciones en peticiones batch
+        // Parsea texto TAF crudo (un bloque por aeródromo, puede ser multilínea)
+        function parsearTafRaw(texto, icaos, tafMap) {
+            const lineas = texto.split('\n');
+            let bloque = '', icaoActual = '';
+            const flush = () => {
+                if (icaoActual && icaos.includes(icaoActual) && bloque)
+                    tafMap[icaoActual] = bloque.trim();
+            };
+            for (const linea of lineas) {
+                const t = linea.trim();
+                const m = t.match(/^TAF\s+(?:AMD\s+|COR\s+)?([A-Z]{4})\b/);
+                if (m) { flush(); icaoActual = m[1]; bloque = t; }
+                else if (icaoActual) { bloque += '\n' + t; }
+            }
+            flush();
+        }
+
+        // Descarga NOTAMs en segundo plano sin bloquear METAR/TAF
+        async function fetchNotamsEnFondo(icaos) {
+            try {
+                const ids = icaos.join(',');
+                const r = await fetchConTimeout(`${CONFIG_METEO.baseAWC}/notam?ids=${ids}&format=json`);
+                if (!r.ok) return;
+                const notams = await r.json();
+                const grupos = {};
+                (Array.isArray(notams) ? notams : []).forEach(n => {
+                    const loc = n.icaoId || n.icaoLocation;
+                    if (!loc) return;
+                    if (!grupos[loc]) grupos[loc] = [];
+                    const txt = (n.notamTxt || n.message || n.rawNotam || '').trim();
+                    if (txt) grupos[loc].push(txt);
+                });
+                let actualizado = false;
+                icaos.forEach(icao => {
+                    if (grupos[icao] !== undefined && estadoMeteo[icao]) {
+                        estadoMeteo[icao].notam = grupos[icao].join('\n');
+                        actualizado = true;
+                    }
+                });
+                if (actualizado) refrescarBloquesMeteo();
+            } catch (e) { /* NOTAM es no crítico: fallo silencioso */ }
+        }
+
+        // Obtiene METAR + TAF de todas las estaciones; NOTAM se descarga en paralelo sin bloquear
         async function actualizarMeteorologia() {
             const icaos = Object.keys(baseDatosAerodromos);
             setEstadoFeed('LOADING', 'ACTUALIZANDO');
             try {
-                let metarMap = {}, tafMap = {}, notamMap = {};
+                let metarMap = {}, tafMap = {};
 
                 if (CONFIG_METEO.PROXY_METEO) {
-                    // Modo proxy (meteochile/DGAC via weather-proxy.js): { metar:{ICAO:str}, taf:{ICAO:str}, notam:{ICAO:str} }
+                    // Modo proxy: { metar:{ICAO:str}, taf:{ICAO:str}, notam:{ICAO:str} }
                     const r = await fetchConTimeout(`${CONFIG_METEO.PROXY_METEO}?ids=${icaos.join(',')}`);
                     if (r.status === 429) throw new Error('RATE_LIMIT');
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     const j = await r.json();
                     metarMap = j.metar || {};
                     tafMap = j.taf || {};
-                    notamMap = j.notam || {};
                 } else {
-                    // Modo directo NOAA AWC (JSON), peticiones batch paralelas por tipo
+                    // Camino crítico: solo METAR y TAF (NOTAM va en segundo plano)
                     const ids = icaos.join(',');
-                    // NOTAM: petición no crítica — si falla, se mantiene la caché
-                    const [rMetar, rTaf, rNotam] = await Promise.all([
-                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/metar?ids=${ids}&format=json`),
-                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/taf?ids=${ids}&format=json&hours=24`),
-                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/notam?ids=${ids}&format=json`).catch(() => null)
+                    const [rMetar, rTaf] = await Promise.all([
+                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/metar?ids=${ids}&format=json&hours=3`),
+                        fetchConTimeout(`${CONFIG_METEO.baseAWC}/taf?ids=${ids}&format=json&hours=24`)
                     ]);
+                    console.log(`[meteo] METAR ${rMetar.status} TAF ${rTaf.status}`);
                     if (rMetar.status === 429 || rTaf.status === 429) throw new Error('RATE_LIMIT');
                     if (!rMetar.ok || !rTaf.ok) throw new Error('HTTP ' + rMetar.status + '/' + rTaf.status);
 
-                    const metars = await rMetar.json();
-                    const tafs = await rTaf.json();
-                    (Array.isArray(metars) ? metars : []).forEach(m => {
-                        if (m && m.icaoId && m.rawOb) metarMap[m.icaoId] = m.rawOb;
-                    });
-                    (Array.isArray(tafs) ? tafs : []).forEach(t => {
-                        // Compatibilidad con rawTAF (campo original) y rawTaf (variante)
-                        if (t && t.icaoId && (t.rawTAF || t.rawTaf)) tafMap[t.icaoId] = t.rawTAF || t.rawTaf;
-                    });
+                    // Leer como texto y luego parsear — más robusto ante cambios de formato
+                    const [metarTxt, tafTxt] = await Promise.all([rMetar.text(), rTaf.text()]);
+                    console.log('[meteo] METAR preview:', metarTxt.substring(0, 120));
 
-                    // Agrupar NOTAMs por ICAO (un aeródromo puede tener varios NOTAMs activos)
-                    if (rNotam && rNotam.ok) {
-                        const notams = await rNotam.json();
-                        const grupos = {};
-                        (Array.isArray(notams) ? notams : []).forEach(n => {
-                            const loc = n.icaoId || n.icaoLocation;
-                            if (!loc) return;
-                            if (!grupos[loc]) grupos[loc] = [];
-                            const txt = (n.notamTxt || n.message || n.rawNotam || '').trim();
-                            if (txt) grupos[loc].push(txt);
+                    // Intentar JSON; si falla o está vacío, intentar formato raw
+                    try {
+                        const metars = JSON.parse(metarTxt);
+                        (Array.isArray(metars) ? metars : []).forEach(m => {
+                            if (m && m.icaoId && (m.rawOb || m.raw)) metarMap[m.icaoId] = m.rawOb || m.raw;
                         });
-                        // Para aeródromos con respuesta de la API (aunque vacía) actualizar la caché
-                        icaos.forEach(icao => {
-                            if (grupos[icao] !== undefined) notamMap[icao] = grupos[icao].join('\n');
+                    } catch (e) { /* no era JSON válido */ }
+
+                    if (Object.keys(metarMap).length === 0) {
+                        // Fallback: parsear texto crudo (una línea por METAR)
+                        metarTxt.split('\n').forEach(l => {
+                            const t = l.trim();
+                            const icao = t.split(/\s+/)[0];
+                            if (icao && icaos.includes(icao)) metarMap[icao] = t;
                         });
                     }
+
+                    try {
+                        const tafs = JSON.parse(tafTxt);
+                        (Array.isArray(tafs) ? tafs : []).forEach(t => {
+                            if (t && t.icaoId && (t.rawTAF || t.rawTaf || t.raw))
+                                tafMap[t.icaoId] = t.rawTAF || t.rawTaf || t.raw;
+                        });
+                    } catch (e) { /* no era JSON válido */ }
+
+                    if (Object.keys(tafMap).length === 0) {
+                        parsearTafRaw(tafTxt, icaos, tafMap);
+                    }
+
+                    console.log('[meteo] METAR encontrados:', Object.keys(metarMap).join(',') || 'NINGUNO');
+                    console.log('[meteo] TAF encontrados:', Object.keys(tafMap).join(',') || 'NINGUNO');
+
+                    // NOTAM en segundo plano: no bloquea ni retrasa METAR/TAF
+                    fetchNotamsEnFondo(icaos);
                 }
 
                 let actualizados = 0;
                 icaos.forEach(icao => {
-                    const nm = metarMap[icao], nt = tafMap[icao], nn = notamMap[icao];
-                    if (nm || nt || nn !== undefined) {
+                    const nm = metarMap[icao], nt = tafMap[icao];
+                    if (nm || nt) {
                         estadoMeteo[icao] = {
                             metar: nm || estadoMeteo[icao].metar,
                             taf: nt || estadoMeteo[icao].taf,
-                            notam: nn !== undefined ? nn : estadoMeteo[icao].notam,
+                            notam: estadoMeteo[icao].notam,
                             fuente: 'LIVE', ts: new Date()
                         };
                         actualizados++;
@@ -659,19 +712,19 @@
                 });
 
                 if (actualizados > 0) {
-                    backoffMeteoMs = 15000; // éxito: reset del backoff
-                    setEstadoFeed('LIVE', 'LIVE ' + relojCorto());
+                    backoffMeteoMs = 15000;
+                    setEstadoFeed('LIVE', `LIVE ${relojCorto()} · ${actualizados} AD`);
                     refrescarBloquesMeteo();
                     programarMeteo(CONFIG_METEO.intervaloMs);
                 } else {
-                    // Respuesta OK pero sin datos útiles -> mantener caché
-                    setEstadoFeed('CACHE', 'SIN DATOS · CACHÉ');
+                    setEstadoFeed('CACHE', 'SIN DATOS AWC · CACHÉ');
                     programarMeteo(CONFIG_METEO.intervaloMs);
                 }
             } catch (err) {
-                // Manejo de errores / rate-limiting: backoff exponencial y fallback a caché
+                console.error('[meteo] Error:', err.message);
                 const esRate = String(err.message).includes('RATE_LIMIT');
-                setEstadoFeed(esRate ? 'CACHE' : 'ERROR', esRate ? 'RATE-LIMIT · CACHÉ' : 'OFFLINE · CACHÉ');
+                setEstadoFeed(esRate ? 'CACHE' : 'ERROR',
+                    esRate ? 'RATE-LIMIT · CACHÉ' : `OFFLINE · CACHÉ (${err.message})`);
                 programarMeteo(backoffMeteoMs);
                 backoffMeteoMs = Math.min(backoffMeteoMs * 2, CONFIG_METEO.reintentoMaxMs);
             }
